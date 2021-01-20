@@ -1,8 +1,8 @@
 /* ------------------------------------------------------------------
- * Ax-Proxy - Proxy Task
+ * AxProxy - Network Proxy Task
  * ------------------------------------------------------------------ */
 
-#include "ella.h"
+#include "axproxy.h"
 
 /**
  * IP/TCP connection stream 
@@ -13,10 +13,7 @@ struct stream_t
     int fd;
     int polled;
     int level;
-
-#ifdef STATIC_POOL
     int allocated;
-#endif
 
     struct stream_t *neighbour;
     struct stream_t *prev;
@@ -24,49 +21,53 @@ struct stream_t
 };
 
 /**
- * Ella Proxy program variables
+ * AxProxy program variables
  */
 static int exit_flag = 0;
 static struct stream_t *stream_list;
 static size_t poll_len = 0;
 static int poll_modified = 1;
-#ifndef STATIC_POOL
-static size_t poll_size = POLL_BASE_SIZE;
-static struct pollfd *poll_list;
-#else
-static size_t poll_size = STATIC_POOL_SIZE;
-static struct pollfd poll_list[STATIC_POOL_SIZE];
-static struct stream_t stream_pool[STATIC_POOL_SIZE];
-#endif
+static size_t poll_size = POOL_SIZE;
+static struct pollfd poll_list[POOL_SIZE];
+static struct stream_t stream_pool[POOL_SIZE];
 
 /**
- * Expand poll event list
+ * Set socket timeouts
  */
-static int poll_expand ( void )
+static void socket_set_timeouts ( int sock )
 {
-#ifndef STATIC_POOL
-    size_t size_backup = poll_size;
-    struct pollfd *list_backup = poll_list;
+    struct timeval timeout;
 
-    poll_size <<= 1;
+    /* Set socket send timeout */
+    timeout.tv_sec = SEND_TIMEOUT_SEC;
+    timeout.tv_usec = 0;
+    setsockopt ( sock, SOL_SOCKET, SO_SNDTIMEO, ( char * ) &timeout, sizeof ( timeout ) );
 
-    if ( !( poll_list =
-            ( struct pollfd * ) realloc ( poll_list, poll_size * sizeof ( struct pollfd ) ) ) )
+    /* Set socket recv timeout */
+    timeout.tv_sec = RECV_TIMEOUT_SEC;
+    timeout.tv_usec = 0;
+    setsockopt ( sock, SOL_SOCKET, SO_RCVTIMEO, ( char * ) &timeout, sizeof ( timeout ) );
+}
+
+/**
+ * Send complete data from buffer to output socket
+ */
+static int send_complete ( int sockfd, const void *buf, size_t tot )
+{
+    size_t len;
+    size_t sum;
+
+    for ( sum = 0; sum < tot; sum += len )
     {
-        errno = ENOMEM;
-        free ( list_backup );
-        return -1;
-    }
-
-    while ( size_backup < poll_size )
-    {
-        poll_list[size_backup++].events = POLLIN;
+        if ( ( ssize_t ) ( len =
+                send ( sockfd, ( const unsigned char * ) buf + sum, tot - sum,
+                    MSG_NOSIGNAL ) ) < 0 )
+        {
+            return -1;
+        }
     }
 
     return 0;
-#else
-    return -1;
-#endif
 }
 
 /**
@@ -75,16 +76,8 @@ static int poll_expand ( void )
 static struct stream_t *insert_stream ( int role, int sock )
 {
     struct stream_t *stream;
-#ifdef STATIC_POOL
     size_t i;
-#endif
 
-#ifndef STATIC_POOL
-    if ( !( stream = malloc ( sizeof ( struct stream_t ) ) ) )
-    {
-        return NULL;
-    }
-#else
     for ( i = 0, stream = NULL; i < sizeof ( stream_pool ) / sizeof ( struct stream_t ); i++ )
     {
         if ( !stream_pool[i].allocated )
@@ -100,7 +93,6 @@ static struct stream_t *insert_stream ( int role, int sock )
     }
 
     stream->allocated = 1;
-#endif
 
     stream->role = role;
     stream->fd = sock;
@@ -175,7 +167,7 @@ static int listen_socket ( unsigned int addr, unsigned short port, int role )
 /**
  * Show relations statistics
  */
-#ifndef SILENT_MODE
+#ifdef VERBOSE_MODE
 static void show_stats ( void )
 {
     int assoc_count = 0;
@@ -196,7 +188,7 @@ static void show_stats ( void )
         iter = iter->next;
     }
 
-    N ( printf ( "[ella] relations: S %i A %i\n", assoc_count / 2,
+    N ( printf ( "[axpr] relations: S %i A %i\n", assoc_count / 2,
             total_count - assoc_count + ( assoc_count / 2 ) ) );
 }
 #endif
@@ -222,11 +214,7 @@ static void remove_stream ( struct stream_t *stream )
     {
         stream->prev->next = stream->next;
     }
-#ifndef STATIC_POOL
-    free ( stream );
-#else
     stream->allocated = 0;
-#endif
     poll_modified = 1;
 }
 
@@ -240,10 +228,8 @@ static void remove_relation ( struct stream_t *stream )
         remove_stream ( stream->neighbour );
     }
     remove_stream ( stream );
-    N ( printf ( "[ella] removed relation.\n" ) );
-#ifndef SILENT_MODE
-    show_stats (  );
-#endif
+    N ( printf ( "[axpr] removed relation.\n" ) );
+    N ( show_stats (  ) );
 }
 
 /**
@@ -280,9 +266,7 @@ static void clear_rels ( void )
         iter = iter->next;
     }
 
-#ifndef SILENT_MODE
-    show_stats (  );
-#endif
+    N ( show_stats (  ) );
 }
 
 /**
@@ -303,7 +287,7 @@ static void empty_forwarding_rels ( void )
         iter = next;
     }
 
-    N ( printf ( "[ella] reset relations.\n" ) );
+    N ( printf ( "[axpr] reset relations.\n" ) );
 }
 
 /**
@@ -323,6 +307,7 @@ static int new_stream ( int lfd, int role )
     /* Allocate new stream */
     if ( !( stream = insert_stream ( role, sock ) ) )
     {
+        close(sock);
         return -1;
     }
 
@@ -343,7 +328,7 @@ static int poll_rebuild ( void )
     struct stream_t *iter = stream_list;
 
     /* Append file descriptors to the poll list */
-    for ( poll_len = 0; iter; iter = iter->next )
+    for ( poll_len = 0; iter && poll_len < POOL_SIZE; iter = iter->next )
     {
         /* Skip port A select on level connect */
         if ( iter->role == S_PORT_A && iter->level == LEVEL_CONNECT )
@@ -362,12 +347,6 @@ static int poll_rebuild ( void )
             poll_list[poll_len].events = POLLIN;
         }
 
-        /* Expand poll event list if needed */
-        if ( poll_len == poll_size && poll_expand (  ) < 0 )
-        {
-            return -1;
-        }
-
         /* Append stream fd to poll event list if allowed */
         poll_list[poll_len++].fd = iter->fd;
         iter->polled = 1;
@@ -384,8 +363,6 @@ static int poll_rebuild ( void )
 static int move_data ( int srcfd, int dstfd )
 {
     size_t tot;
-    size_t len;
-    size_t sum;
     unsigned char buffer[65536];
 
     /* Receive data from input socket to buffer */
@@ -401,60 +378,44 @@ static int move_data ( int srcfd, int dstfd )
         return -1;
     }
 
-    /* Send complete data from buffer to output socket */
-    for ( sum = 0; sum < tot; sum += len )
+    /* Send data to neighbour */
+    if ( send_complete ( dstfd, buffer, tot ) < 0 )
     {
-        if ( ( ssize_t ) ( len = send ( dstfd, buffer + sum, tot - sum, MSG_NOSIGNAL ) ) < 0 )
-        {
-            return -1;
-        }
+        return -1;
     }
 
     return 0;
 }
 
 /**
- * Perform HTTPS proxy handshake
+ * Send SOCK5 proxy success message
  */
-#ifdef ENABLE_HTTPS
-static int proxy_handshake_https ( char *buffer, unsigned int *addr, unsigned short *port )
+static int proxy_confirm_socks5 ( int sock )
 {
-    char *start_ptr;
-    char *end_ptr;
-    const char *s_connect = "CONNECT ";
+    unsigned char response[] = {
+        5,      /* SOCKS5 version */
+        0,      /* request granted */
+        0,      /* reserved */
+        1,      /* address type: IPv4 */
+        0,      /* address byte #1 */
+        0,      /* address byte #2 */
+        0,      /* address byte #3 */
+        0,      /* address byte #4 */
+        0,      /* port byte #1 */
+        0       /* port byte #2 */
+    };
 
-    if ( strstr ( buffer, s_connect ) != buffer )
+    if ( send_complete ( sock, response, sizeof ( response ) ) < 0 )
     {
         return -1;
     }
-
-    start_ptr = buffer + 8;
-    end_ptr = start_ptr;
-
-    while ( *end_ptr && *end_ptr != '\x20' && *end_ptr != ':' )
-    {
-        end_ptr++;
-    }
-
-    *end_ptr = '\0';
-
-    /* Resolve hostname */
-    if ( nsaddr ( start_ptr, addr ) < 0 )
-    {
-        return -1;
-    }
-
-    /* Use HTTPS forward port number */
-    *port = FORWARD_PORT;
 
     return 0;
 }
-#endif
 
 /**
  * Perform SOCKS5 proxy handshake
  */
-#ifdef ENABLE_SOCKS5
 static int proxy_handshake_socks5 ( int sock, unsigned char *buffer, size_t len, size_t size,
     unsigned int *addr, unsigned short *port )
 {
@@ -462,7 +423,7 @@ static int proxy_handshake_socks5 ( int sock, unsigned char *buffer, size_t len,
     char hostname[256];
 
     /* Validate minumal handshake request length */
-    if ( len < 3 )
+    if ( len < 2 )
     {
         return -1;
     }
@@ -473,13 +434,13 @@ static int proxy_handshake_socks5 ( int sock, unsigned char *buffer, size_t len,
         return -1;
     }
 
-    if ( buffer[1] == 1 && buffer[2] == 2 )
+    if ( len > 2 && buffer[1] == 1 && buffer[2] == 2 )
     {
         /* Username-Password authentication selected */
         buffer[1] = 2;
 
         /* Send message remote peer */
-        if ( send ( sock, buffer, 2, MSG_NOSIGNAL ) < 0 )
+        if ( send_complete ( sock, buffer, 2 ) < 0 )
         {
             return -1;
         }
@@ -494,7 +455,7 @@ static int proxy_handshake_socks5 ( int sock, unsigned char *buffer, size_t len,
         buffer[1] = 0;
 
         /* Send message remote peer */
-        if ( send ( sock, buffer, 2, MSG_NOSIGNAL ) < 0 )
+        if ( send_complete ( sock, buffer, 2 ) < 0 )
         {
             return -1;
         }
@@ -505,7 +466,7 @@ static int proxy_handshake_socks5 ( int sock, unsigned char *buffer, size_t len,
         buffer[1] = 0;
 
         /* Send message remote peer */
-        if ( send ( sock, buffer, 2, MSG_NOSIGNAL ) < 0 )
+        if ( send_complete ( sock, buffer, 2 ) < 0 )
         {
             return -1;
         }
@@ -559,61 +520,13 @@ static int proxy_handshake_socks5 ( int sock, unsigned char *buffer, size_t len,
     hostname[hostlen] = '\0';
 
     /* Resolve hostname */
-    if ( nsaddr ( hostname, addr ) < 0 )
+    if ( nsaddr_cached ( hostname, addr ) < 0 )
     {
         return -1;
     }
 
     return 0;
 }
-#endif
-
-/**
- * Send HTTPS proxy success message
- */
-#ifdef ENABLE_HTTPS
-static int proxy_confirm_https ( int sock )
-{
-    const char *response = "HTTP/1.1 200 OK\r\n\r\n";
-
-    if ( send ( sock, response, strlen ( response ), MSG_NOSIGNAL ) < 0 )
-    {
-        close ( sock );
-        return -1;
-    }
-
-    return 0;
-}
-#endif
-
-/**
- * Send SOCK5 proxy success message
- */
-#ifdef ENABLE_SOCKS5
-static int proxy_confirm_socks5 ( int sock )
-{
-    unsigned char response[] = {
-        5,      /* SOCKS5 version */
-        0,      /* request granted */
-        0,      /* reserved */
-        1,      /* address type: IPv4 */
-        0,      /* address byte #1 */
-        0,      /* address byte #2 */
-        0,      /* address byte #3 */
-        0,      /* address byte #4 */
-        0,      /* port byte #1 */
-        0       /* port byte #2 */
-    };
-
-    if ( send ( sock, response, sizeof ( response ), MSG_NOSIGNAL ) < 0 )
-    {
-        close ( sock );
-        return -1;
-    }
-
-    return 0;
-}
-#endif
 
 /**
  * Estabilish connection with destination host
@@ -621,7 +534,6 @@ static int proxy_confirm_socks5 ( int sock )
 static int connect_endpoint ( struct stream_t *stream )
 {
     int sock;
-    int use_https_proxy;
     ssize_t len;
     unsigned short port = 0;
     long mode = 0;
@@ -639,38 +551,18 @@ static int connect_endpoint ( struct stream_t *stream )
     /* Put proxy handshake string delimiter */
     buffer[len] = '\0';
 
-    /* Detect proxy handshake type */
-    use_https_proxy = buffer[0] == 'C';
-
     /* Perform proxy handshake */
-    if ( use_https_proxy )
+    if ( proxy_handshake_socks5 ( stream->fd, ( unsigned char * ) buffer, len,
+            sizeof ( buffer ), &addr, &port ) < 0 )
     {
-#ifdef ENABLE_HTTPS
-        if ( proxy_handshake_https ( buffer, &addr, &port ) < 0 )
-        {
-            return -1;
-        }
-#else
-        errno = ENOSYS;
         return -1;
-#endif
-    } else
-    {
-#ifdef ENABLE_SOCKS5
-        if ( proxy_handshake_socks5 ( stream->fd, ( unsigned char * ) buffer, len,
-                sizeof ( buffer ), &addr, &port ) < 0 )
-        {
-            return -1;
-        }
-#else
-        errno = ENOSYS;
-        return -1;
-#endif
     }
 
-#ifdef ALLOWED_ONLY_PORT
-    if (port != ALLOWED_ONLY_PORT) {
-        errno = EINVAL;
+    /* Prevent connections to localhost if needed */
+#ifdef BLOCK_LOCALHOST_PORTS
+    if ( addr == htonl ( 0x7f000001 ) )
+    {
+        N ( printf ( "[axpr] localhost is isolated.\n" ) );
         return -1;
     }
 #endif
@@ -688,44 +580,39 @@ static int connect_endpoint ( struct stream_t *stream )
     }
 
     /* Set non-blocking mode and connect socket  */
-    if ( ( mode = fcntl ( sock, F_GETFL, 0 ) ) < 0
-        || fcntl ( sock, F_SETFL, mode | O_NONBLOCK ) < 0 )
+    if ( ( mode = fcntl ( sock, F_GETFL, 0 ) ) < 0 )
+    {
+        close ( sock );
+        return -1;
+    }
+
+    if ( fcntl ( sock, F_SETFL, mode | O_NONBLOCK ) < 0 )
     {
         close ( sock );
         return -1;
     }
 
     /* Add new relation on success */
-    if ( connect ( sock, ( struct sockaddr * ) &saddr, sizeof ( struct sockaddr_in ) ) >= 0
-        || errno != EINPROGRESS )
+    if ( connect ( sock, ( struct sockaddr * ) &saddr, sizeof ( struct sockaddr_in ) ) >= 0 )
     {
         close ( sock );
         return -1;
     }
 
-    /* Send HTTP response to A peer */
-    if ( use_https_proxy )
+    if ( errno != EINPROGRESS )
     {
-#ifdef ENABLE_HTTPS
-        if ( proxy_confirm_https ( stream->fd ) < 0 )
-        {
-            return -1;
-        }
-#else
-        errno = ENOSYS;
+        close ( sock );
         return -1;
-#endif
-    } else
+    }
+
+    /* Set socket timeouts */
+    socket_set_timeouts ( sock );
+
+    /* Send socks5 response to A peer */
+    if ( proxy_confirm_socks5 ( stream->fd ) < 0 )
     {
-#ifdef ENABLE_SOCKS5
-        if ( proxy_confirm_socks5 ( stream->fd ) < 0 )
-        {
-            return -1;
-        }
-#else
-        errno = ENOSYS;
+        close ( sock );
         return -1;
-#endif
     }
 
     /* Allocate new neighbour structure */
@@ -742,7 +629,6 @@ static int connect_endpoint ( struct stream_t *stream )
     /* Shift relation level */
     neighbour->level = LEVEL_CONNECT;
     stream->level = LEVEL_CONNECT;
-
     return 0;
 }
 
@@ -754,13 +640,6 @@ static int complete_connect ( struct stream_t *stream )
     int so_error = 0;
     long mode = 0;
     socklen_t len = sizeof ( so_error );
-
-    /* Neighbour must be present */
-    if ( !stream->neighbour )
-    {
-        return -1;
-    }
-
     /* Read and analyze socket error */
     if ( getsockopt ( stream->fd, SOL_SOCKET, SO_ERROR, &so_error, &len ) < 0 || so_error )
     {
@@ -768,17 +647,20 @@ static int complete_connect ( struct stream_t *stream )
     }
 
     /* Restore blocking mode on socket */
-    if ( ( mode = fcntl ( stream->fd, F_GETFL, 0 ) ) < 0
-        || fcntl ( stream->fd, F_SETFL, mode & ( ~O_NONBLOCK ) ) < 0 )
+    if ( ( mode = fcntl ( stream->fd, F_GETFL, 0 ) ) < 0 )
     {
         return -1;
     }
 
-    /* Shift relation level */
+    if ( fcntl ( stream->fd, F_SETFL, mode & ( ~O_NONBLOCK ) ) < 0 )
+    {
+        return -1;
+    }
+
+    /* Poll fds list must be rebuilt as event type changed */
     stream->level = LEVEL_FORWARD;
     stream->neighbour->level = LEVEL_FORWARD;
     poll_modified = 1;
-
     return 0;
 }
 
@@ -792,21 +674,22 @@ static void poll_loop ( void )
     struct stream_t *stream;
 
     /* Rebuild poll event list if needed */
-    if ( poll_modified && poll_rebuild (  ) < 0 )
+    if ( poll_modified )
     {
-        N ( printf ( "[ella] rebuild failed: %i\n", errno ) );
-        exit_flag = 1;
-        return;
+        if ( poll_rebuild (  ) < 0 )
+        {
+            N ( printf ( "[axpr] rebuild failed: %i\n", errno ) );
+            exit_flag = 1;
+            return;
+        }
     }
-
     /* Find streams ready to be read */
     if ( ( status = poll ( poll_list, poll_len, POLL_TIMEOUT_MSEC ) ) < 0 )
     {
-        N ( printf ( "[ella] poll failed: %i\n", errno ) );
+        N ( printf ( "[axpr] poll failed: %i\n", errno ) );
         exit_flag = 1;
         return;
     }
-
     /* Clear unassociated relations on timeout */
     if ( !status )
     {
@@ -828,8 +711,8 @@ static void poll_loop ( void )
             return;
         }
 
-        if ( stream->level == LEVEL_CONNECT && ( poll_list[pos].revents & POLLOUT )
-            && stream->role == S_PORT_B )
+        if ( stream->level == LEVEL_CONNECT && stream->role == S_PORT_B 
+            && ( poll_list[pos].revents & POLLOUT ))
         {
             if ( complete_connect ( stream ) < 0 )
             {
@@ -873,24 +756,16 @@ static void poll_loop ( void )
 /**
  * Proxy task entry point
  */
-int proxy_task ( const struct ella_params_t *params )
+int proxy_task ( const struct axproxy_params_t *params )
 {
     size_t i;
 
     /* Setup listen sockets */
     if ( listen_socket ( params->addr, params->port, L_ACCEPT ) < 0 )
     {
-        N ( printf ( "[ella] allocation failed: %i\n", errno ) );
+        N ( printf ( "[axpr] allocation failed: %i\n", errno ) );
         return -1;
     }
-
-    /* Allocate poll event list */
-#ifndef STATIC_POOL
-    if ( !( poll_list = ( struct pollfd * ) malloc ( poll_size * sizeof ( struct pollfd ) ) ) )
-    {
-        return -1;
-    }
-#endif
 
     /* Prepare poll event list */
     for ( i = 0; i < poll_size; i++ )
@@ -898,7 +773,7 @@ int proxy_task ( const struct ella_params_t *params )
         poll_list[i].events = POLLIN;
     }
 
-    N ( printf ( "[ella] allocation done.\n" ) );
+    N ( printf ( "[axpr] allocation done.\n" ) );
 
     /* Perform select loop until exit flag is set */
     while ( !exit_flag )
@@ -909,12 +784,7 @@ int proxy_task ( const struct ella_params_t *params )
     /* Remove all relations */
     empty_rels (  );
 
-    /* Free poll event list */
-#ifndef STATIC_POOL
-    free ( poll_list );
-#endif
-
-    N ( printf ( "[ella] free done.\n" ) );
+    N ( printf ( "[axpr] free done.\n" ) );
 
     return 0;
 }

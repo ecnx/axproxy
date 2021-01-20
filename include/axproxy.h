@@ -1,8 +1,10 @@
 /* ------------------------------------------------------------------
- * Ax-Proxy - Shared Project Header
+ * AxProxy - Shared Project Header
  * ------------------------------------------------------------------ */
 
+#include "defs.h"
 #include "config.h"
+#include "dns.h"
 
 #ifndef AXPROXY_H
 #define AXPROXY_H
@@ -11,7 +13,7 @@
 #define S_PORT_A                    2
 #define S_PORT_B                    3
 
-#define ELLA_VERSION                "1.03.5a"
+#define AXPROXY_VERSION             "1.03.6a"
 
 #define POLL_TIMEOUT_MSEC           16 * 1000
 #define POLL_BASE_SIZE              32
@@ -22,10 +24,18 @@
 #define LEVEL_CONNECT               2
 #define LEVEL_FORWARD               3
 
+#define FREE_SOCKET(S) \
+    if ( S >= 0 ) \
+    { \
+        shutdown ( S, SHUT_RDWR ); \
+        close ( S ); \
+        S = -1; \
+    }
+
 /**
- * Ella Proxy program params
+ * AxProxy program params
  */
-struct ella_params_t
+struct axproxy_params_t
 {
     unsigned int addr;
     unsigned short port;
@@ -34,11 +44,11 @@ struct ella_params_t
 /**
  * Proxy task entry point
  */
-extern int proxy_task ( const struct ella_params_t *params );
+extern int proxy_task ( const struct axproxy_params_t *params );
 
 /**
  * Resolve hostname into IPv4 address
  */
-extern int nsaddr ( const char *hostname, unsigned int *addr );
+extern int nsaddr_cached ( const char *hostname, unsigned int *addr );
 
 #endif

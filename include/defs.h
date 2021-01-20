@@ -1,15 +1,15 @@
 /* ------------------------------------------------------------------
- * AxProxy - Config Header
+ * AxProxy - Includes and Definitions
  * ------------------------------------------------------------------ */
 
 #define _GNU_SOURCE
 #include <arpa/inet.h>
+#include <netdb.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
-#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,11 +23,24 @@
 #include <time.h>
 #include <unistd.h>
 
-#ifndef AXPROXY_CONFIG_H
-#define AXPROXY_CONFIG_H
+#ifndef MRELAY_DEFS_H
+#define MRELAY_DEFS_H
 
-#define BLOCK_LOCALHOST_PORTS
-#define SELF_RESTART_SEC 900
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+    
+#ifdef VERBOSE_MODE
+#define N(X) X
+#else
+#define N(X)
+#endif
+
+#define POOL_SIZE 256
+
+#define CONN_TIMEOUT_SEC            4
+#define SEND_TIMEOUT_SEC            4
+#define RECV_TIMEOUT_SEC            4
 
 
 #endif
