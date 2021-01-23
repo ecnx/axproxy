@@ -176,6 +176,12 @@ static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, si
     unsigned char buffer[UDP_PKT_LEN_MAX];
     unsigned char hostbuf[DNS_NAME_SIZE_MAX];
 
+    /* Check for recursion limit exceeded */
+    if ( depth >= DNS_DEPTH_LIMIT )
+    {
+        return -1;
+    }
+
     /* Get current time */
     gettimeofday ( &tv, NULL );
 
@@ -242,27 +248,27 @@ static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, si
     }
 
     /* Wait for response */
-    for ( ;; )
+    for ( i = 0; i < 255; i++ )
     {
         /* Receive DNS response packet */
-        len = recvfrom ( sock, buffer, sizeof ( buffer ), 0, NULL, NULL );
-
-        /* Socket no longer needed */
-        close ( sock );
-
-        /* Check error status and response length */
-        if ( ( ssize_t ) len <= 0 || len < query_len )
+        if ( ( ssize_t ) ( len =
+                recvfrom ( sock, buffer, sizeof ( buffer ), 0, NULL, NULL ) ) <= 0 )
         {
+            close ( sock );
             return -1;
         }
 
         /* Break on DNS query id and hostname match */
-        if ( ntohs ( header->id ) == query_id
+        if ( len >= query_len
+            && ntohs ( header->id ) == query_id
             && !memcmp ( buffer + sizeof ( struct dns_header_t ), encoded, enclen ) )
         {
             break;
         }
     }
+
+    /* Socket no longer needed */
+    close ( sock );
 
     /* Prepare answer stats */
     ans_count = ntohs ( header->ans_count );
@@ -407,16 +413,13 @@ static int dns_resolve_root ( const unsigned char *encoded, size_t enclen, size_
     gettimeofday ( &tv, NULL );
     ns_seed = tv.tv_sec ^ tv.tv_usec;
 
-    if ( depth < DNS_DEPTH_LIMIT )
+    for ( i = 0; i < DNS_N_SERVERS; i++ )
     {
-        for ( i = 0; i < DNS_N_SERVERS; i++ )
-        {
-            ns = htonl ( dns_servers[( ns_seed + i ) % DNS_N_SERVERS] );
+        ns = htonl ( dns_servers[( ns_seed + i ) % DNS_N_SERVERS] );
 
-            if ( dns_recursive_query ( encoded, enclen, depth, ns, addr ) >= 0 )
-            {
-                return 0;
-            }
+        if ( dns_recursive_query ( encoded, enclen, depth, ns, addr ) >= 0 )
+        {
+            return 0;
         }
     }
 
