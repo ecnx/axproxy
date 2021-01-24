@@ -8,7 +8,7 @@
  * NS cache config
  */
 #define CACHE_NAME_LENGTH 32
-#define CACHE_RECORDS_LIMIT 256
+#define CACHE_RECORDS_LIMIT 1024
 
 /**
  * NS cache variables
@@ -22,6 +22,7 @@ static size_t cache_len = 0;
  */
 int nsaddr_cached ( const char *hostname, unsigned int *addr )
 {
+    int ret;
     size_t i;
     size_t len;
     char name[CACHE_NAME_LENGTH];
@@ -43,20 +44,23 @@ int nsaddr_cached ( const char *hostname, unsigned int *addr )
     {
         if ( !memcmp ( cached_names + i * CACHE_NAME_LENGTH, name, CACHE_NAME_LENGTH ) )
         {
-            *addr = cached_addrs[i];
+            if (!(*addr = cached_addrs[i]))
+            {
+                return -1;
+            }
             return 0;
         }
     }
 
-    if ( nsaddr ( hostname, addr ) < 0 )
+    if ((ret = nsaddr ( hostname, addr )) < 0)
     {
-        return -1;
+        *addr = 0;
     }
-
+    
     memcpy ( cached_names + cache_len * CACHE_NAME_LENGTH, name, CACHE_NAME_LENGTH );
     cached_addrs[cache_len] = *addr;
     cache_len++;
     cache_len %= CACHE_RECORDS_LIMIT;
 
-    return 0;
+    return ret;
 }
