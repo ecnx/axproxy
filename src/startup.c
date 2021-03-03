@@ -9,7 +9,7 @@
  */
 static void show_usage ( void )
 {
-    N ( printf ( "[axpr] usage: axproxy addr:port\n"));
+    N ( printf ( "[axpr] usage: axproxy addr:port\n" ) );
 }
 
 /**
@@ -61,11 +61,7 @@ static int ip_port_decode ( const char *input, unsigned int *addr, unsigned shor
  */
 int main ( int argc, char *argv[] )
 {
-#ifdef SELF_RESTART_SEC
-    pid_t pid;
-    int status;
-#endif
-    struct axproxy_params_t params;
+    struct proxy_t proxy;
 
     /* Show program version */
     N ( printf ( "[axpr] AxProxy - ver. " AXPROXY_VERSION "\n" ) );
@@ -77,32 +73,26 @@ int main ( int argc, char *argv[] )
         return 1;
     }
 #ifndef VERBOSE_MODE
-    daemon ( 0, 0 );
+    if ( daemon ( 0, 0 ) < 0 )
+    {
+        return -1;
+    }
 #endif
 
-    if (ip_port_decode(argv[1], &params.addr , &params.port) < 0)
+    if ( ip_port_decode ( argv[1], &proxy.addr, &proxy.port ) < 0 )
     {
         show_usage (  );
         return 1;
     }
 
-#ifdef SELF_RESTART_SEC
-
-    /* Periodically create and destory process (ommited on failure). */
-    while ( ( pid = fork (  ) ) > 0 )
+    for ( ;; )
     {
-        sleep ( SELF_RESTART_SEC );
-        /* Avoid defunct processes by reading exit status. */
-        kill ( pid, SIGKILL );
-        waitpid ( pid, &status, 0 );
-    }
-
-#endif
-
-    if ( proxy_task ( &params ) < 0 )
-    {
-        N ( printf ( "[axpr] exit status: %i\n", errno ) );
-        return 1;
+        if ( proxy_task ( &proxy ) < 0 )
+        {
+            N ( printf ( "[axpr] exit status: %i\n", errno ) );
+            return 1;
+        }
+        sleep ( 1 );
     }
 
     N ( printf ( "[axpr] exit status: success\n" ) );

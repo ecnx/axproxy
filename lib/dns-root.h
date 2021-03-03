@@ -10,10 +10,6 @@
  */
 static const unsigned int dns_servers[] = {
     0x08080808, /* Google DNS: 8.8.8.8 */
-    0x08080404, /* Google DNS: 8.8.4.4 */
-    0x08080808, /* Google DNS: 8.8.8.8 */
-    0x08080404, /* Google DNS: 8.8.4.4 */
-    0x08080808, /* Google DNS: 8.8.8.8 */
     0x08080404  /* Google DNS: 8.8.4.4 */
 };
 

@@ -29,7 +29,7 @@
 #ifndef UNUSED
 #define UNUSED(x) (void)(x)
 #endif
-    
+
 #ifdef VERBOSE_MODE
 #define N(X) X
 #else
@@ -37,10 +37,5 @@
 #endif
 
 #define POOL_SIZE 256
-
-#define CONN_TIMEOUT_SEC            4
-#define SEND_TIMEOUT_SEC            4
-#define RECV_TIMEOUT_SEC            4
-
 
 #endif

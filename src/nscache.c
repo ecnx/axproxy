@@ -44,7 +44,7 @@ int nsaddr_cached ( const char *hostname, unsigned int *addr )
     {
         if ( !memcmp ( cached_names + i * CACHE_NAME_LENGTH, name, CACHE_NAME_LENGTH ) )
         {
-            if (!(*addr = cached_addrs[i]))
+            if ( !( *addr = cached_addrs[i] ) )
             {
                 return -1;
             }
@@ -52,11 +52,11 @@ int nsaddr_cached ( const char *hostname, unsigned int *addr )
         }
     }
 
-    if ((ret = nsaddr ( hostname, addr )) < 0)
+    if ( ( ret = nsaddr ( hostname, addr ) ) < 0 )
     {
         *addr = 0;
     }
-    
+
     memcpy ( cached_names + cache_len * CACHE_NAME_LENGTH, name, CACHE_NAME_LENGTH );
     cached_addrs[cache_len] = *addr;
     cache_len++;

@@ -9,42 +9,69 @@
 #ifndef AXPROXY_H
 #define AXPROXY_H
 
-#define L_ACCEPT                    1
-#define S_PORT_A                    2
-#define S_PORT_B                    3
+#define S_INVALID                   -1
+#define L_ACCEPT                    0
+#define S_PORT_A                    1
+#define S_PORT_B                    2
 
-#define AXPROXY_VERSION             "1.03.6a"
+#define AXPROXY_VERSION             "1.03.8a"
 
 #define POLL_TIMEOUT_MSEC           16 * 1000
-#define POLL_BASE_SIZE              32
 #define LISTEN_BACKLOG              4
 
 #define LEVEL_NONE                  0
-#define LEVEL_AWAITING              1
-#define LEVEL_CONNECT               2
-#define LEVEL_FORWARD               3
-
-#define FREE_SOCKET(S) \
-    if ( S >= 0 ) \
-    { \
-        shutdown ( S, SHUT_RDWR ); \
-        close ( S ); \
-        S = -1; \
-    }
+#define LEVEL_SOCKS_VER             1
+#define LEVEL_SOCKS_AUTH            2
+#define LEVEL_SOCKS_REQ             3
+#define LEVEL_SOCKS_PASS            4
+#define LEVEL_CONNECTING            5
+#define LEVEL_FORWARDING            6
 
 /**
- * AxProxy program params
+ * Utility data queue
  */
-struct axproxy_params_t
+struct queue_t
+{
+    size_t len;
+    unsigned char arr[16];
+};
+
+/**
+ * IP/TCP connection stream 
+ */
+struct stream_t
+{
+    int role;
+    int fd;
+    int level;
+    int allocated;
+    int abandoned;
+    short events;
+
+    struct pollfd *pollref;
+    struct stream_t *neighbour;
+    struct stream_t *prev;
+    struct stream_t *next;
+    struct queue_t queue;
+};
+
+/**
+ * AxProxy task context
+ */
+struct proxy_t
 {
     unsigned int addr;
     unsigned short port;
+
+    struct stream_t *stream_head;
+    struct stream_t *stream_tail;
+    struct stream_t stream_pool[POOL_SIZE];
 };
 
 /**
  * Proxy task entry point
  */
-extern int proxy_task ( const struct axproxy_params_t *params );
+extern int proxy_task ( struct proxy_t *proxy );
 
 /**
  * Resolve hostname into IPv4 address
