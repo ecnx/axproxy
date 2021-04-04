@@ -2,22 +2,17 @@
  * AxProxy - Shared Project Header
  * ------------------------------------------------------------------ */
 
+#ifndef AXPROXY_H
+#define AXPROXY_H
+
 #include "defs.h"
 #include "config.h"
 #include "dns.h"
-
-#ifndef AXPROXY_H
-#define AXPROXY_H
 
 #define S_INVALID                   -1
 #define L_ACCEPT                    0
 #define S_PORT_A                    1
 #define S_PORT_B                    2
-
-#define AXPROXY_VERSION             "1.03.8a"
-
-#define POLL_TIMEOUT_MSEC           16 * 1000
-#define LISTEN_BACKLOG              4
 
 #define LEVEL_NONE                  0
 #define LEVEL_SOCKS_VER             1
@@ -26,6 +21,8 @@
 #define LEVEL_SOCKS_PASS            4
 #define LEVEL_CONNECTING            5
 #define LEVEL_FORWARDING            6
+
+#define EPOLLREF                    ((struct pollfd*) -1)
 
 /**
  * Utility data queue
@@ -37,7 +34,7 @@ struct queue_t
 };
 
 /**
- * IP/TCP connection stream 
+ * IP/TCP connection stream
  */
 struct stream_t
 {
@@ -47,6 +44,8 @@ struct stream_t
     int allocated;
     int abandoned;
     short events;
+    short levents;
+    short revents;
 
     struct pollfd *pollref;
     struct stream_t *neighbour;
@@ -60,6 +59,7 @@ struct stream_t
  */
 struct proxy_t
 {
+    int epoll_fd;
     unsigned int addr;
     unsigned short port;
 

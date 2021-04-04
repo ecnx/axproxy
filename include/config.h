@@ -2,32 +2,15 @@
  * AxProxy - Config Header
  * ------------------------------------------------------------------ */
 
-#define _GNU_SOURCE
-#include <arpa/inet.h>
-#include <ctype.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <poll.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <time.h>
-#include <unistd.h>
-
 #ifndef AXPROXY_CONFIG_H
 #define AXPROXY_CONFIG_H
 
-#define BLOCK_LOCALHOST_PORTS
-#define SELF_RESTART_SEC 900
-
+#define AXPROXY_VERSION             "1.04.2a"
+#define POOL_SIZE                   256
+#define LISTEN_BACKLOG              4
+#define POLL_TIMEOUT_MSEC           16000
+#define FORWARD_CHUNK_LEN           16384
+#define BLOCK_LOCALHOST_PORTS       1
+#define HTTPS_TRAFFIC_ONLY          0
 
 #endif
