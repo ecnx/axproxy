@@ -89,10 +89,17 @@ int main ( int argc, char *argv[] )
     {
         if ( proxy_task ( &proxy ) < 0 )
         {
-            N ( printf ( "[axpr] exit status: %i\n", errno ) );
-            return 1;
+            if ( errno == EINTR || errno == ENOTCONN )
+            {
+                S ( printf ( "[axpr] retrying in 1 sec...\n" ) );
+                sleep ( 1 );
+
+            } else
+            {
+                S ( printf ( "[axpr] exit status: %i\n", errno ) );
+                return 1;
+            }
         }
-        sleep ( 1 );
     }
 
     N ( printf ( "[axpr] exit status: success\n" ) );
