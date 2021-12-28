@@ -91,12 +91,12 @@ int main ( int argc, char *argv[] )
         {
             if ( errno == EINTR || errno == ENOTCONN )
             {
-                S ( printf ( "[axpr] retrying in 1 sec...\n" ) );
+                N ( printf ( "[axpr] retrying in 1 sec...\n" ) );
                 sleep ( 1 );
 
             } else
             {
-                S ( printf ( "[axpr] exit status: %i\n", errno ) );
+                N ( printf ( "[axpr] exit status: %i\n", errno ) );
                 return 1;
             }
         }
