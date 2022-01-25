@@ -1,31 +1,49 @@
 /* ------------------------------------------------------------------
- * AxProxy - Name Server Cache
+ * AxProxy - Name server cache
  * ------------------------------------------------------------------ */
 
 #include "axproxy.h"
 
 /**
- * NS cache config
+ * Name server cache config
  */
 #define CACHE_NAME_LENGTH 32
 #define CACHE_RECORDS_LIMIT 1024
 
 /**
- * NS cache variables
+ * Name server cache record structure
  */
-static unsigned int cached_addrs[CACHE_RECORDS_LIMIT];
-static unsigned char cached_names[CACHE_NAME_LENGTH * CACHE_RECORDS_LIMIT];
-static size_t cache_len = 0;
+struct ns_record_t
+{
+    unsigned int addr;
+    time_t expiry;
+    char name[CACHE_NAME_LENGTH];
+};
+
+/**
+ * Name server cache structure
+ */
+struct ns_cache_t
+{
+    struct ns_record_t records[CACHE_RECORDS_LIMIT];
+};
+
+/**
+ * Name server cache variable
+ */
+static struct ns_cache_t ns_cache;
 
 /**
  * Resolve hostname into IPv4 address
  */
 int nsaddr_cached ( const char *hostname, unsigned int *addr )
 {
-    int ret;
     size_t i;
     size_t len;
-    char name[CACHE_NAME_LENGTH];
+    size_t count;
+    time_t now;
+    struct ns_record_t *record;
+    struct ns_record_t *update;
 
     if ( inet_pton ( AF_INET, hostname, addr ) > 0 )
     {
@@ -33,34 +51,55 @@ int nsaddr_cached ( const char *hostname, unsigned int *addr )
     }
 
     len = strlen ( hostname );
-    if ( len >= sizeof ( name ) )
+
+    if ( len >= sizeof ( ns_cache.records[0].name ) )
     {
         return nsaddr ( hostname, addr );
     }
-    memset ( name, '\0', sizeof ( name ) );
-    memcpy ( name, hostname, len );
 
-    for ( i = 0; i < cache_len; i++ )
+    now = time ( NULL );
+    count = sizeof ( ns_cache.records ) / sizeof ( struct ns_record_t );
+
+    for ( i = 0; i < count; i++ )
     {
-        if ( !memcmp ( cached_names + i * CACHE_NAME_LENGTH, name, CACHE_NAME_LENGTH ) )
+        record = ns_cache.records + i;
+
+        if ( record->expiry > now )
         {
-            if ( !( *addr = cached_addrs[i] ) )
+            if ( !strcmp ( hostname, record->name ) )
             {
-                return -1;
+                *addr = record->addr;
+                return 0;
             }
-            return 0;
         }
     }
 
-    if ( ( ret = nsaddr ( hostname, addr ) ) < 0 )
+    if ( nsaddr ( hostname, addr ) < 0 )
     {
-        *addr = 0;
+        return -1;
     }
 
-    memcpy ( cached_names + cache_len * CACHE_NAME_LENGTH, name, CACHE_NAME_LENGTH );
-    cached_addrs[cache_len] = *addr;
-    cache_len++;
-    cache_len %= CACHE_RECORDS_LIMIT;
+    update = NULL;
 
-    return ret;
+    for ( i = 0; i < count; i++ )
+    {
+        record = ns_cache.records + i;
+
+        if ( record->expiry <= now )
+        {
+            update = record;
+            break;
+        }
+    }
+
+    if ( !update )
+    {
+        update = ns_cache.records + ( now % count );
+    }
+
+    memcpy ( update->name, hostname, len + 1 );
+    update->expiry = now + 900;
+    update->addr = *addr;
+
+    return 0;
 }
