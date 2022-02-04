@@ -854,10 +854,13 @@ static int handle_stream_socks ( struct proxy_t *proxy, struct stream_t *stream 
         /* Asset local address */
         if ( BLOCK_LOCALHOST_PORTS )
         {
-            if ( ntohl ( addr ) == 0x7f000001 )
+            if ( BLOCK_LOCALHOST_PORTS )
             {
-                N ( printf ( "[axpr] localhost is restricted.\n" ) );
-                return -1;
+                if ( ntohl ( addr ) >> 24 == 0x7f )
+                {
+                    N ( printf ( "[axpr] localhost is restricted.\n" ) );
+                    return -1;
+                }
             }
         }
         /* Verify endpoint port */
