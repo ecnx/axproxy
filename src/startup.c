@@ -9,7 +9,7 @@
  */
 static void show_usage ( void )
 {
-    N ( printf ( "[axpr] usage: axproxy addr:port\n" ) );
+    V ( printf ( "[axpr] usage: axproxy addr:port\n" ) );
 }
 
 /**
@@ -64,7 +64,7 @@ int main ( int argc, char *argv[] )
     struct proxy_t proxy;
 
     /* Show program version */
-    N ( printf ( "[axpr] AxProxy - ver. " AXPROXY_VERSION "\n" ) );
+    V ( printf ( "[axpr] AxProxy - ver. " AXPROXY_VERSION "\n" ) );
 
     /* Validate arguments count */
     if ( argc != 2 )
@@ -91,17 +91,17 @@ int main ( int argc, char *argv[] )
         {
             if ( errno == EINTR || errno == ENOTCONN )
             {
-                N ( printf ( "[axpr] retrying in 1 sec...\n" ) );
+                V ( printf ( "[axpr] retrying in 1 sec...\n" ) );
                 sleep ( 1 );
 
             } else
             {
-                N ( printf ( "[axpr] exit status: %i\n", errno ) );
+                V ( printf ( "[axpr] exit status: %i\n", errno ) );
                 return 1;
             }
         }
     }
 
-    N ( printf ( "[axpr] exit status: success\n" ) );
+    V ( printf ( "[axpr] exit status: success\n" ) );
     return 0;
 }

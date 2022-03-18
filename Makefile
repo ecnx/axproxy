@@ -1,5 +1,5 @@
 # AxProxy Makefile
-INCLUDES=-I include -I lib $(CONFIG) $(EXTRA)
+INCLUDES=-I include -I lib $(CONFIG) $(EXTRA) -DEPOLL_CREATE_ANY
 INDENT_FLAGS=-br -ce -i4 -bl -bli0 -bls -c4 -cdw -ci4 -cs -nbfda -l100 -lp -prs -nlp -nut -nbfde -npsl -nss
 
 OBJS = \
