@@ -15,19 +15,11 @@
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 
 #ifndef UNUSED
 #define UNUSED(x) (void)(x)
-#endif
-
-#ifdef VERBOSE_MODE
-#define V(X) X
-#else
-#define V(X)
 #endif
 
 #endif
