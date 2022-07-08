@@ -9,51 +9,11 @@
  */
 static void show_usage ( void )
 {
-    V ( printf ( "[axpr] usage: axproxy addr:port\n" ) );
-}
-
-/**
- * Decode ip address and port number
- */
-static int ip_port_decode ( const char *input, unsigned int *addr, unsigned short *port )
-{
-    unsigned int lport;
-    size_t len;
-    const char *ptr;
-    char buffer[32];
-
-    /* Find port number separator */
-    if ( !( ptr = strchr ( input, ':' ) ) )
-    {
-        return -1;
-    }
-
-    /* Validate destination buffer size */
-    if ( ( len = ptr - input ) >= sizeof ( buffer ) )
-    {
-        return -1;
-    }
-
-    /* Save address string */
-    memcpy ( buffer, input, len );
-    buffer[len] = '\0';
-
-    /* Parse IP address */
-    if ( inet_pton ( AF_INET, buffer, addr ) <= 0 )
-    {
-        return -1;
-    }
-
-    ptr++;
-
-    /* Parse port b number */
-    if ( sscanf ( ptr, "%u", &lport ) <= 0 || lport > 65535 )
-    {
-        return -1;
-    }
-
-    *port = lport;
-    return 0;
+    failure ( "usage: axproxy [-vd] listen-addr:listen-port\n\n"
+        "       option -v         Enable verbose logging\n"
+        "       option -d         Run in background\n"
+        "       listen-addr       Listen address\n"
+        "       listen-port       Listen port\n\n" "Note: Both IPv4 and IPv6 can be used\n\n" );
 }
 
 /**
@@ -61,47 +21,59 @@ static int ip_port_decode ( const char *input, unsigned int *addr, unsigned shor
  */
 int main ( int argc, char *argv[] )
 {
-    struct proxy_t proxy;
+    int arg_off = 0;
+    int daemon_flag = 0;
+    struct proxy_t proxy = { 0 };
 
     /* Show program version */
-    V ( printf ( "[axpr] AxProxy - ver. " AXPROXY_VERSION "\n" ) );
+    info ( "AxProxy - ver. " AXPROXY_VERSION "\n" );
 
     /* Validate arguments count */
-    if ( argc != 2 )
-    {
-        show_usage (  );
-        return 1;
-    }
-#ifndef VERBOSE_MODE
-    if ( daemon ( 0, 0 ) < 0 )
-    {
-        return -1;
-    }
-#endif
-
-    if ( ip_port_decode ( argv[1], &proxy.addr, &proxy.port ) < 0 )
+    if ( argc < 2 )
     {
         show_usage (  );
         return 1;
     }
 
-    for ( ;; )
+    /* Check for options */
+    if ( argv[1][0] == '-' )
     {
-        if ( proxy_task ( &proxy ) < 0 )
+        arg_off = 1;
+        proxy.verbose = !!strchr ( argv[1], 'v' );
+        daemon_flag = !!strchr ( argv[1], 'd' );
+    }
+
+    /* Re-validate arguments count */
+    if ( argc < arg_off + 2 )
+    {
+        show_usage (  );
+        return 1;
+    }
+
+    /* Parse listen address and port */
+    if ( ip_port_decode ( argv[arg_off + 1], &proxy.entrance ) < 0 )
+    {
+        show_usage (  );
+        return 1;
+    }
+
+    /* Run in background if needed */
+    if ( daemon_flag )
+    {
+        if ( daemon ( 0, 0 ) < 0 )
         {
-            if ( errno == EINTR || errno == ENOTCONN )
-            {
-                V ( printf ( "[axpr] retrying in 1 sec...\n" ) );
-                sleep ( 1 );
-
-            } else
-            {
-                V ( printf ( "[axpr] exit status: %i\n", errno ) );
-                return 1;
-            }
+            failure ( "cannot run in background (%i)\n", errno );
+            return 1;
         }
     }
 
-    V ( printf ( "[axpr] exit status: success\n" ) );
+    /* Launch the proxy task */
+    if ( proxy_task ( &proxy ) < 0 )
+    {
+        failure ( "exit status: %i\n", errno );
+        return 1;
+    }
+
+    info ( "exit status: success\n" );
     return 0;
 }

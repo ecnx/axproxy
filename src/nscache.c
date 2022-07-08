@@ -15,7 +15,7 @@
  */
 struct ns_record_t
 {
-    unsigned int addr;
+    uint32_t addr;
     time_t expiry;
     char name[CACHE_NAME_LENGTH];
 };
@@ -36,7 +36,7 @@ static struct ns_cache_t ns_cache;
 /**
  * Resolve hostname into IPv4 address
  */
-int nsaddr_cached ( const char *hostname, unsigned int *addr )
+int nsaddr_cached ( const char *hostname, uint32_t * addr )
 {
     size_t i;
     size_t len;
