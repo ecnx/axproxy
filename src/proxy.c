@@ -235,7 +235,7 @@ static int handle_stream_socks ( struct proxy_t *proxy, struct stream_t *stream 
             /* Assert maximum data length */
             if ( hostlen >= sizeof ( hostname ) )
             {
-                failure ( "hostname is too long by socket:%i.\n", stream->fd );
+                failure ( "hostname is too long by socket:%i\n", stream->fd );
                 return -1;
             }
 
