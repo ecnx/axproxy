@@ -8,7 +8,7 @@
 /**
  * Address list of DNS Root Servers
  */
-static const unsigned int dns_servers[] = {
+static const uint32_t dns_servers[] = {
     0x08080808, /* Google DNS: 8.8.8.8 */
     0x08080404  /* Google DNS: 8.8.4.4 */
 };

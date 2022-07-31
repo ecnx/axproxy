@@ -47,44 +47,44 @@
  */
 struct dns_header_t
 {
-    unsigned short id;          /* identification number */
+    uint16_t id;                /* identification number */
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-    unsigned char rd:1;         /* recursion desired */
-    unsigned char tc:1;         /* truncated message */
-    unsigned char aa:1;         /* authoritive answer */
-    unsigned char opcode:4;     /* purpose of message */
-    unsigned char qr:1;         /* query/response flag */
+    uint8_t rd:1;               /* recursion desired */
+    uint8_t tc:1;               /* truncated message */
+    uint8_t aa:1;               /* authoritive answer */
+    uint8_t opcode:4;           /* purpose of message */
+    uint8_t qr:1;               /* query/response flag */
 #elif __BYTE_ORDER == __BIG_ENDIAN
-    unsigned char qr:1;         /* query/response flag */
-    unsigned char opcode:4;     /* purpose of message */
-    unsigned char aa:1;         /* authoritive answer */
-    unsigned char tc:1;         /* truncated message */
-    unsigned char rd:1;         /* recursion desired */
+    uint8_t qr:1;               /* query/response flag */
+    uint8_t opcode:4;           /* purpose of message */
+    uint8_t aa:1;               /* authoritive answer */
+    uint8_t tc:1;               /* truncated message */
+    uint8_t rd:1;               /* recursion desired */
 #else
 #error "Endian not set"
 #endif
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-    unsigned char rcode:4;      /* response code */
-    unsigned char cd:1;         /* checking disabled */
-    unsigned char ad:1;         /* authenticated data */
-    unsigned char z:1;          /* reserved for future use */
-    unsigned char ra:1;         /* recursion available */
+    uint8_t rcode:4;            /* response code */
+    uint8_t cd:1;               /* checking disabled */
+    uint8_t ad:1;               /* authenticated data */
+    uint8_t z:1;                /* reserved for future use */
+    uint8_t ra:1;               /* recursion available */
 #elif __BYTE_ORDER == __BIG_ENDIAN
-    unsigned char ra:1;         /* recursion available */
-    unsigned char z:1;          /* reserved for future use */
-    unsigned char ad:1;         /* authenticated data */
-    unsigned char cd:1;         /* checking disabled */
-    unsigned char rcode:4;      /* response code */
+    uint8_t ra:1;               /* recursion available */
+    uint8_t z:1;                /* reserved for future use */
+    uint8_t ad:1;               /* authenticated data */
+    uint8_t cd:1;               /* checking disabled */
+    uint8_t rcode:4;            /* response code */
 #else
 #error "Endian not set"
 #endif
 
-    unsigned short q_count;     /* number of question entries */
-    unsigned short ans_count;   /* number of answer entries */
-    unsigned short auth_count;  /* number of authority entries */
-    unsigned short add_count;   /* number of resource entries */
+    uint16_t q_count;           /* number of question entries */
+    uint16_t ans_count;         /* number of answer entries */
+    uint16_t auth_count;        /* number of authority entries */
+    uint16_t add_count;         /* number of resource entries */
 } __attribute__( ( packed ) );
 
 /**
@@ -92,8 +92,8 @@ struct dns_header_t
  */
 struct dns_question_t
 {
-    unsigned short qtype;
-    unsigned short qclass;
+    uint16_t qtype;
+    uint16_t qclass;
 } __attribute__( ( packed ) );
 
 /**
@@ -102,16 +102,16 @@ struct dns_question_t
 struct dns_answer_t
 {
     /* name */
-    unsigned short type;
-    unsigned short _class;
-    unsigned int ttl;
-    unsigned short rd_length;
+    uint16_t type;
+    uint16_t _class;
+    uint32_t ttl;
+    uint16_t rd_length;
     /* rdata */
 } __attribute__( ( packed ) );
 
 /**
  * Resolve hostname into IPv4 address
  */
-extern int nsaddr ( const char *hostname, unsigned int *addr );
+extern int nsaddr ( const char *hostname, uint32_t * addr );
 
 #endif

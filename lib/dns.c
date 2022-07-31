@@ -8,16 +8,16 @@
 /**
  * Count of DNS Root Servers
  */
-#define DNS_N_SERVERS (sizeof(dns_servers) / sizeof(unsigned int))
+#define DNS_N_SERVERS (sizeof(dns_servers) / sizeof(uint32_t))
 
 /**
  * Encode hostname like www.example.com into 3www7example3com
  */
-static int dns_encode_hostname ( const char *in, unsigned char *out, size_t osize )
+static int dns_encode_hostname ( const char *in, uint8_t * out, size_t osize )
 {
     size_t len = 0;
     char *ptr;
-    unsigned char *limit;
+    uint8_t *limit;
 
     limit = out + osize;
 
@@ -54,11 +54,10 @@ static int dns_encode_hostname ( const char *in, unsigned char *out, size_t osiz
 /**
  * Find nearby answer structure
  */
-static const struct dns_answer_t *dns_nearby_answer ( const unsigned char **pptr,
-    const unsigned char *limit )
+static const struct dns_answer_t *dns_nearby_answer ( const uint8_t ** pptr, const uint8_t * limit )
 {
     const struct dns_answer_t *answer;
-    const unsigned char *ptr;
+    const uint8_t *ptr;
 
     /* Get buffer pointer */
     ptr = *pptr;
@@ -109,8 +108,8 @@ static const struct dns_answer_t *dns_nearby_answer ( const unsigned char **pptr
 /**
  * Decompress DNS name using packet iteration
  */
-static ssize_t dns_decompress_name ( const unsigned char *in, size_t ipos,
-    size_t inlen, unsigned char *out, size_t osize )
+static ssize_t dns_decompress_name ( const uint8_t * in, size_t ipos,
+    size_t inlen, uint8_t * out, size_t osize )
 {
     size_t opos = 0;
 
@@ -144,37 +143,37 @@ static ssize_t dns_decompress_name ( const unsigned char *in, size_t ipos,
 /**
  * Resolve encoded hostname via Root Servers
  */
-static int dns_resolve_root ( const unsigned char *encoded, size_t enclen, size_t *querycnt,
-    unsigned int *addr );
+static int dns_resolve_root ( const uint8_t * encoded, size_t enclen, size_t *querycnt,
+    uint32_t * addr );
 
 /**
  * Perform DNS query with recursion
  */
-static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, size_t *querycnt,
-    unsigned int ns, unsigned int *addr )
+static int dns_recursive_query ( const uint8_t * encoded, size_t enclen, size_t *querycnt,
+    uint32_t ns, uint32_t * addr )
 {
     int sock;
-    unsigned short i;
-    unsigned short query_id;
-    unsigned short ans_count;
-    unsigned short auth_count;
-    unsigned short add_count;
-    unsigned int ns_addr;
+    uint16_t i;
+    uint16_t query_id;
+    uint16_t ans_count;
+    uint16_t auth_count;
+    uint16_t add_count;
+    uint32_t ns_addr;
     size_t query_len;
     size_t hostlen;
     size_t len;
-    unsigned char *limit;
-    const unsigned char *hostptr;
-    const unsigned char *ptrbackup;
-    const unsigned char *ptr;
-    const unsigned int *addrptr;
+    uint8_t *limit;
+    const uint8_t *hostptr;
+    const uint8_t *ptrbackup;
+    const uint8_t *ptr;
+    const uint32_t *addrptr;
     struct dns_header_t *header;
     struct dns_question_t *question;
     struct sockaddr_in dest;
     struct timeval tv = { 0 };
     const struct dns_answer_t *answer;
-    unsigned char buffer[UDP_PKT_LEN_MAX];
-    unsigned char hostbuf[DNS_NAME_SIZE_MAX];
+    uint8_t buffer[UDP_PKT_LEN_MAX];
+    uint8_t hostbuf[DNS_NAME_SIZE_MAX];
 
     /* Check for recursion limit exceeded */
     if ( *querycnt >= DNS_QUERY_LIMIT )
@@ -290,11 +289,10 @@ static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, si
             return -1;
         }
 
-        if ( ntohs ( answer->type ) == T_A
-            && ntohs ( answer->rd_length ) == sizeof ( unsigned int ) )
+        if ( ntohs ( answer->type ) == T_A && ntohs ( answer->rd_length ) == sizeof ( uint32_t ) )
         {
             addrptr =
-                ( const unsigned int * ) ( ( const unsigned char * ) answer +
+                ( const uint32_t * ) ( ( const uint8_t * ) answer +
                 sizeof ( struct dns_answer_t ) );
             *addr = *addrptr;
             return 0;
@@ -321,11 +319,10 @@ static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, si
             break;
         }
 
-        if ( ntohs ( answer->type ) == T_A
-            && ntohs ( answer->rd_length ) == sizeof ( unsigned int ) )
+        if ( ntohs ( answer->type ) == T_A && ntohs ( answer->rd_length ) == sizeof ( uint32_t ) )
         {
             addrptr =
-                ( const unsigned int * ) ( ( const unsigned char * ) answer +
+                ( const uint32_t * ) ( ( const uint8_t * ) answer +
                 sizeof ( struct dns_answer_t ) );
 
             if ( dns_recursive_query ( encoded, enclen, querycnt, *addrptr, addr ) >= 0 )
@@ -349,8 +346,7 @@ static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, si
         if ( ntohs ( answer->type ) == T_NS )
         {
             hostptr =
-                ( const unsigned char * ) ( ( const unsigned char * ) answer +
-                sizeof ( struct dns_answer_t ) );
+                ( const uint8_t * ) ( ( const uint8_t * ) answer + sizeof ( struct dns_answer_t ) );
 
             /* Resolve address with lower-level DNS server */
             if ( ( ssize_t ) ( hostlen =
@@ -382,8 +378,7 @@ static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, si
         if ( ntohs ( answer->type ) == T_CNAME )
         {
             hostptr =
-                ( const unsigned char * ) ( ( const unsigned char * ) answer +
-                sizeof ( struct dns_answer_t ) );
+                ( const uint8_t * ) ( ( const uint8_t * ) answer + sizeof ( struct dns_answer_t ) );
 
             /* Resolve address with lower-level DNS server */
             if ( ( ssize_t ) ( hostlen =
@@ -405,10 +400,10 @@ static int dns_recursive_query ( const unsigned char *encoded, size_t enclen, si
 /**
  * Resolve encoded hostname via Root Servers
  */
-static int dns_resolve_root ( const unsigned char *encoded, size_t enclen, size_t *querycnt,
-    unsigned int *addr )
+static int dns_resolve_root ( const uint8_t * encoded, size_t enclen, size_t *querycnt,
+    uint32_t * addr )
 {
-    unsigned int ns;
+    uint32_t ns;
     struct timeval tv = { 0 };
 
     /* Seed NS selection */
@@ -427,10 +422,10 @@ static int dns_resolve_root ( const unsigned char *encoded, size_t enclen, size_
 /**
  * Resolve hostname into IPv4 address
  */
-int nsaddr ( const char *hostname, unsigned int *addr )
+int nsaddr ( const char *hostname, uint32_t * addr )
 {
     size_t querycnt = 0;
-    unsigned char encoded[DNS_NAME_SIZE_MAX];
+    uint8_t encoded[DNS_NAME_SIZE_MAX];
 
     if ( dns_encode_hostname ( hostname, encoded, sizeof ( encoded ) ) < 0 )
     {
